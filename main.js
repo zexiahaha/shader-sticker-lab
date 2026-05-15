@@ -1,4 +1,101 @@
 const canvas = document.getElementById('glCanvas');
+
+const imageInput = document.getElementById('imageInput');
+const effectSelect = document.getElementById('effectSelect');
+const paramsPanel = document.getElementById('paramsPanel');
+const resetParamsButton = document.getElementById('resetParamsButton');
+
+const effectConfigs = {
+  wave: {
+    label: 'Wave',
+    params: {
+      frequency: {
+        label: 'Frequency',
+        min: 1,
+        max: 60,
+        step: 1,
+        value: 20,
+      },
+      amplitude: {
+        label: 'Amplitude',
+        min: 0,
+        max: 0.1,
+        step: 0.001,
+        value: 0.02,
+      },
+      speed: {
+        label: 'Speed',
+        min: 0,
+        max: 5,
+        step: 0.1,
+        value: 1,
+      },
+    },
+  },
+};
+
+const paramState = {};
+const paramInputs = {};
+
+function resetParams(effectName) {
+  const config = effectConfigs[effectName];
+
+  paramState[effectName] = {};
+
+  Object.entries(config.params).forEach(([name, param]) => {
+    paramState[effectName][name] = param.value;
+  });
+}
+
+function renderParamsPanel(effectName) {
+  const config = effectConfigs[effectName];
+  paramsPanel.innerHTML = '';
+  paramInputs[effectName] = {};
+
+  Object.entries(config.params).forEach(([name, param]) => {
+    const row = document.createElement('div');
+    row.className = 'param-row';
+
+    const inputId = `${effectName}-${name}Input`;
+
+    const label = document.createElement('label');
+    label.htmlFor = inputId;
+    label.textContent = param.label;
+
+    const input = document.createElement('input');
+    input.id = inputId;
+    input.type = 'range';
+    input.min = param.min;
+    input.max = param.max;
+    input.step = param.step;
+    input.value = paramState[effectName][name];
+
+    const value = document.createElement('span');
+    value.textContent = input.value;
+
+    input.addEventListener('input', function () {
+      paramState[effectName][name] = Number(input.value);
+      value.textContent = input.value;
+    });
+
+    row.appendChild(label);
+    row.appendChild(input);
+    row.appendChild(value);
+    paramsPanel.appendChild(row);
+
+    paramInputs[effectName][name] = input;
+  });
+}
+
+resetParams('wave');
+renderParamsPanel('wave');
+
+resetParamsButton.addEventListener('click', function () {
+  const effectName = effectSelect.value;
+  resetParams(effectName);
+  renderParamsPanel(effectName);
+});
+
 const gl = canvas.getContext('webgl');
 
 if (!gl) {
@@ -26,11 +123,18 @@ precision mediump float;
 
 varying vec2 v_texCoord;
 uniform sampler2D u_image;
+uniform float u_time;
+
+uniform float u_frequency;
+uniform float u_amplitude;
+uniform float u_speed;
 
 void main() {
-    gl_FragColor = texture2D(u_image, v_texCoord);
-    // gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);
-    // gl_FragColor = vec4(v_texCoord, 0.0, 1.0);
+    vec2 uv = v_texCoord;
+
+    float wave = sin(uv.y * u_frequency + u_time * u_speed);
+    uv.x = uv.x + wave * u_amplitude;
+    gl_FragColor = texture2D(u_image, uv);
 }
 `;
 
@@ -78,6 +182,11 @@ const program = createProgram(gl, vertexShader, fragmentShader);
 gl.useProgram(program);
 
 const imageLocation = gl.getUniformLocation(program, 'u_image');
+const timeLocation = gl.getUniformLocation(program, 'u_time');
+
+const frequencyLocation = gl.getUniformLocation(program, 'u_frequency');
+const amplitudeLocation = gl.getUniformLocation(program, 'u_amplitude');
+const speedLocation = gl.getUniformLocation(program, 'u_speed');
 
 const positions = new Float32Array([
   -1, -1, 1, -1, -1, 1,
@@ -113,10 +222,41 @@ gl.enableVertexAttribArray(texCoordLocation);
 
 gl.vertexAttribPointer(texCoordLocation, 2, gl.FLOAT, false, 0, 0);
 
+let texture = null;
+let animationStarted = false;
 const image = new Image();
 image.src = './assets/test.png';
+
+function getWaveParams() {
+  return paramState.wave;
+}
+
+function render(time) {
+  const params = getWaveParams();
+
+  gl.uniform1f(timeLocation, time * 0.001);
+  gl.uniform1f(frequencyLocation, params.frequency);
+  gl.uniform1f(amplitudeLocation, params.amplitude);
+  gl.uniform1f(speedLocation, params.speed);
+
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+  requestAnimationFrame(render);
+}
+
+imageInput.addEventListener('change', function () {
+  const file = imageInput.files[0];
+
+  if (!file) {
+    return;
+  }
+
+  const url = URL.createObjectURL(file);
+  image.src = url;
+});
+
 image.onload = function () {
-  const texture = gl.createTexture();
+  texture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, texture);
 
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
@@ -130,5 +270,8 @@ image.onload = function () {
   gl.bindTexture(gl.TEXTURE_2D, texture);
   gl.uniform1i(imageLocation, 0);
 
-  gl.drawArrays(gl.TRIANGLES, 0, 6);
+  if (!animationStarted) {
+    animationStarted = true;
+    requestAnimationFrame(render);
+  }
 };
