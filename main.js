@@ -143,6 +143,39 @@ const effectConfigs = {
       },
     },
   },
+  glitch: {
+    label: 'Glitch',
+    params: {
+      strength: {
+        label: 'Strength',
+        min: 0,
+        max: 0.08,
+        step: 0.001,
+        value: 0.025,
+      },
+      speed: {
+        label: 'Speed',
+        min: 0,
+        max: 20,
+        step: 0.5,
+        value: 8,
+      },
+      blockSize: {
+        label: 'Blocks',
+        min: 4,
+        max: 80,
+        step: 1,
+        value: 24,
+      },
+      rgbSplit: {
+        label: 'RGB Split',
+        min: 0,
+        max: 0.03,
+        step: 0.001,
+        value: 0.01,
+      },
+    },
+  },
 };
 
 const paramState = {};
@@ -203,6 +236,7 @@ resetParams('pulse');
 resetParams('bounce');
 resetParams('rainbow');
 resetParams('crt');
+resetParams('glitch');
 renderParamsPanel('wave');
 
 effectSelect.addEventListener('change', function () {
@@ -306,6 +340,11 @@ uniform float u_crtDensity;
 uniform float u_crtRgbSplit;
 uniform float u_crtNoise;
 
+uniform float u_glitchStrength;
+uniform float u_glitchSpeed;
+uniform float u_glitchBlockSize;
+uniform float u_glitchRgbSplit;
+
 uniform float u_effect;
 
 float random(vec2 p) {
@@ -359,6 +398,27 @@ void main() {
       float grain = 1.0 - u_crtNoise + noise * 0.2;
 
       gl_FragColor = vec4(crtColor * scan * vignette * flicker * grain, color.a);
+    } else if (u_effect == 5.0) {
+      float block = floor(uv.y * u_glitchBlockSize);
+      float timeBlock = floor(uv.y * u_glitchSpeed * u_time * 0.35);
+
+      float noise = random(vec2(block, timeBlock));
+      float active = step(0.92, noise);
+
+      float offset = (noise - 0.5) * u_glitchStrength * active;
+
+      float jumpTimeBlock = floor(u_time * u_glitchSpeed * 0.25);
+      float jumpNoise = random(vec2(jumpTimeBlock, 99.0));
+      float jumpActive = step(0.95, jumpNoise);
+      float jumpOffset = (jumpNoise - 0.5) * u_glitchStrength * 2.0 * jumpActive;
+
+      vec2 glitchUv = uv + vec2(jumpOffset, 0.0);
+
+      float r = texture2D(u_image, glitchUv + vec2(offset + u_glitchRgbSplit, 0.0)).r;
+      float g = texture2D(u_image, glitchUv + vec2(offset, 0.0)).g;
+      float b = texture2D(u_image, glitchUv + vec2(offset - u_glitchRgbSplit, 0.0)).b;
+
+      gl_FragColor = vec4(r, g, b, color.a);
     } else {
       gl_FragColor = color;
     }
@@ -440,6 +500,20 @@ const crtDensityLocation = gl.getUniformLocation(program, 'u_crtDensity');
 const crtRgbSplitLocation = gl.getUniformLocation(program, 'u_crtRgbSplit');
 const crtNoiseLocation = gl.getUniformLocation(program, 'u_crtNoise');
 
+const glitchStrengthLocation = gl.getUniformLocation(
+  program,
+  'u_glitchStrength',
+);
+const glitchSpeedLocation = gl.getUniformLocation(program, 'u_glitchSpeed');
+const glitchBlockSizeLocation = gl.getUniformLocation(
+  program,
+  'u_glitchBlockSize',
+);
+const glitchRgbSplitLocation = gl.getUniformLocation(
+  program,
+  'u_glitchRgbSplit',
+);
+
 const positions = new Float32Array([
   -1, -1, 1, -1, -1, 1,
 
@@ -494,6 +568,9 @@ function getRainbowParams() {
 function getCrtParams() {
   return paramState.crt;
 }
+function getGlitchParams() {
+  return paramState.glitch;
+}
 
 function render(time) {
   const effectName = effectSelect.value;
@@ -502,6 +579,7 @@ function render(time) {
   const bounceParams = getBounceParams();
   const rainbowParams = getRainbowParams();
   const crtParams = getCrtParams();
+  const glitchParams = getGlitchParams();
 
   if (effectName === 'wave') {
     gl.uniform1f(effectLocation, 0.0);
@@ -513,6 +591,8 @@ function render(time) {
     gl.uniform1f(effectLocation, 3.0);
   } else if (effectName === 'crt') {
     gl.uniform1f(effectLocation, 4.0);
+  } else if (effectName === 'glitch') {
+    gl.uniform1f(effectLocation, 5.0);
   }
 
   gl.uniform1f(timeLocation, time * 0.001);
@@ -536,6 +616,11 @@ function render(time) {
   gl.uniform1f(crtDensityLocation, crtParams.density);
   gl.uniform1f(crtRgbSplitLocation, crtParams.rgbSplit);
   gl.uniform1f(crtNoiseLocation, crtParams.noise);
+
+  gl.uniform1f(glitchStrengthLocation, glitchParams.strength);
+  gl.uniform1f(glitchSpeedLocation, glitchParams.speed);
+  gl.uniform1f(glitchBlockSizeLocation, glitchParams.blockSize);
+  gl.uniform1f(glitchRgbSplitLocation, glitchParams.rgbSplit);
 
   gl.drawArrays(gl.TRIANGLES, 0, 6);
 
