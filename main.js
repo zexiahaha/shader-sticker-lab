@@ -84,6 +84,65 @@ const effectConfigs = {
       },
     },
   },
+  rainbow: {
+    label: 'Rainbow',
+    params: {
+      strength: {
+        label: 'Strength',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        value: 0.35,
+      },
+      speed: {
+        label: 'Speed',
+        min: 0,
+        max: 8,
+        step: 0.1,
+        value: 4.5,
+      },
+    },
+  },
+  crt: {
+    label: 'CRT',
+    params: {
+      strength: {
+        label: 'Strength',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        value: 0.2,
+      },
+      speed: {
+        label: 'Speed',
+        min: 0,
+        max: 8,
+        step: 0.1,
+        value: 1,
+      },
+      density: {
+        label: 'Density',
+        min: 1,
+        max: 80,
+        step: 1,
+        value: 45,
+      },
+      rgbSplit: {
+        label: 'RGB Split',
+        min: 0,
+        max: 0.01,
+        step: 0.0005,
+        value: 0.006,
+      },
+      noise: {
+        label: 'Noise',
+        min: 0,
+        max: 0.08,
+        step: 0.005,
+        value: 0.03,
+      },
+    },
+  },
 };
 
 const paramState = {};
@@ -142,6 +201,8 @@ function renderParamsPanel(effectName) {
 resetParams('wave');
 resetParams('pulse');
 resetParams('bounce');
+resetParams('rainbow');
+resetParams('crt');
 renderParamsPanel('wave');
 
 effectSelect.addEventListener('change', function () {
@@ -236,7 +297,20 @@ uniform float u_frequency;
 uniform float u_amplitude;
 uniform float u_speed;
 
+uniform float u_rainbowStrength;
+uniform float u_rainbowSpeed;
+
+uniform float u_crtStrength;
+uniform float u_crtSpeed;
+uniform float u_crtDensity;
+uniform float u_crtRgbSplit;
+uniform float u_crtNoise;
+
 uniform float u_effect;
+
+float random(vec2 p) {
+  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+}
 
 void main() {
     vec2 uv = v_texCoord;
@@ -246,7 +320,48 @@ void main() {
       uv.x = uv.x + wave * u_amplitude;
     }
 
-    gl_FragColor = texture2D(u_image, uv);
+    vec4 color = texture2D(u_image, uv);
+
+    if (u_effect == 3.0) {
+      float t = u_time * u_rainbowSpeed;
+
+      vec3 rainbow = vec3(
+        0.5 + 0.5 * sin(t + uv.x * 6.0 + uv.y * 6.0),
+        0.5 + 0.5 * sin(t + uv.x * 6.0 + uv.y * 6.0 + 2.0),
+        0.5 + 0.5 * sin(t + uv.x * 6.0 + uv.y * 6.0 + 4.0)
+      );
+
+      vec3 tinted = color.rgb * rainbow;
+      vec3 finalColor = mix(color.rgb, tinted, u_rainbowStrength);
+
+      gl_FragColor = vec4(finalColor, color.a);
+    } else if (u_effect == 4.0) {
+      float y = uv.y * u_crtDensity + u_time * u_crtSpeed;
+      float line = fract(y);
+      float darkLine = smoothstep(0.0, 0.15, line);
+      float scan = mix(1.0 - u_crtStrength, 1.0, darkLine);
+
+      float offset = u_crtRgbSplit;
+
+      float r = texture2D(u_image, uv + vec2(offset, 0.0)).r;
+      float g = texture2D(u_image, uv).g;
+      float b = texture2D(u_image, uv - vec2(offset, 0.0)).b;
+
+      vec3 crtColor = vec3(r, g, b);
+
+      vec2 center = uv - 0.5;
+      float vignette = 1.0 - dot(center, center) * 0.4;
+      vignette = clamp(vignette, 0.0, 1.0);
+
+      float flicker = 0.96 + 0.015 * sin(u_time * 8.0);
+
+      float noise = random(uv * 512.0 + u_time);
+      float grain = 1.0 - u_crtNoise + noise * 0.2;
+
+      gl_FragColor = vec4(crtColor * scan * vignette * flicker * grain, color.a);
+    } else {
+      gl_FragColor = color;
+    }
 }
 `;
 
@@ -313,6 +428,18 @@ const bounceHeightLocation = gl.getUniformLocation(program, 'u_bounceHeight');
 const bounceSpeedLocation = gl.getUniformLocation(program, 'u_bounceSpeed');
 const bounceSquashLocation = gl.getUniformLocation(program, 'u_bounceSquash');
 
+const rainbowStrengthLocation = gl.getUniformLocation(
+  program,
+  'u_rainbowStrength',
+);
+const rainbowSpeedLocation = gl.getUniformLocation(program, 'u_rainbowSpeed');
+
+const crtStrengthLocation = gl.getUniformLocation(program, 'u_crtStrength');
+const crtSpeedLocation = gl.getUniformLocation(program, 'u_crtSpeed');
+const crtDensityLocation = gl.getUniformLocation(program, 'u_crtDensity');
+const crtRgbSplitLocation = gl.getUniformLocation(program, 'u_crtRgbSplit');
+const crtNoiseLocation = gl.getUniformLocation(program, 'u_crtNoise');
+
 const positions = new Float32Array([
   -1, -1, 1, -1, -1, 1,
 
@@ -361,12 +488,20 @@ function getPulseParams() {
 function getBounceParams() {
   return paramState.bounce;
 }
+function getRainbowParams() {
+  return paramState.rainbow;
+}
+function getCrtParams() {
+  return paramState.crt;
+}
 
 function render(time) {
   const effectName = effectSelect.value;
   const waveParams = getWaveParams();
   const pulseParams = getPulseParams();
   const bounceParams = getBounceParams();
+  const rainbowParams = getRainbowParams();
+  const crtParams = getCrtParams();
 
   if (effectName === 'wave') {
     gl.uniform1f(effectLocation, 0.0);
@@ -374,6 +509,10 @@ function render(time) {
     gl.uniform1f(effectLocation, 1.0);
   } else if (effectName === 'bounce') {
     gl.uniform1f(effectLocation, 2.0);
+  } else if (effectName === 'rainbow') {
+    gl.uniform1f(effectLocation, 3.0);
+  } else if (effectName === 'crt') {
+    gl.uniform1f(effectLocation, 4.0);
   }
 
   gl.uniform1f(timeLocation, time * 0.001);
@@ -388,6 +527,15 @@ function render(time) {
   gl.uniform1f(bounceHeightLocation, bounceParams.height);
   gl.uniform1f(bounceSpeedLocation, bounceParams.speed);
   gl.uniform1f(bounceSquashLocation, bounceParams.squash);
+
+  gl.uniform1f(rainbowStrengthLocation, rainbowParams.strength);
+  gl.uniform1f(rainbowSpeedLocation, rainbowParams.speed);
+
+  gl.uniform1f(crtStrengthLocation, crtParams.strength);
+  gl.uniform1f(crtSpeedLocation, crtParams.speed);
+  gl.uniform1f(crtDensityLocation, crtParams.density);
+  gl.uniform1f(crtRgbSplitLocation, crtParams.rgbSplit);
+  gl.uniform1f(crtNoiseLocation, crtParams.noise);
 
   gl.drawArrays(gl.TRIANGLES, 0, 6);
 
