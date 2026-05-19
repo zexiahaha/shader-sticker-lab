@@ -151,14 +151,14 @@ const effectConfigs = {
         min: 0,
         max: 0.08,
         step: 0.001,
-        value: 0.025,
+        value: 0.061,
       },
       speed: {
         label: 'Speed',
         min: 0,
         max: 20,
         step: 0.5,
-        value: 8,
+        value: 14,
       },
       blockSize: {
         label: 'Blocks',
@@ -172,7 +172,7 @@ const effectConfigs = {
         min: 0,
         max: 0.03,
         step: 0.001,
-        value: 0.01,
+        value: 0.021,
       },
     },
   },
@@ -400,23 +400,17 @@ void main() {
       gl_FragColor = vec4(crtColor * scan * vignette * flicker * grain, color.a);
     } else if (u_effect == 5.0) {
       float block = floor(uv.y * u_glitchBlockSize);
-      float timeBlock = floor(uv.y * u_glitchSpeed * u_time * 0.35);
+      float timeBlock = floor(u_glitchSpeed * u_time * 0.35);
 
       float noise = random(vec2(block, timeBlock));
+      float offsetNoise = random(vec2(block + 17.0, timeBlock));
       float active = step(0.92, noise);
 
-      float offset = (noise - 0.5) * u_glitchStrength * active;
+      float offset = (offsetNoise - 0.5) * u_glitchStrength * active;
 
-      float jumpTimeBlock = floor(u_time * u_glitchSpeed * 0.25);
-      float jumpNoise = random(vec2(jumpTimeBlock, 99.0));
-      float jumpActive = step(0.95, jumpNoise);
-      float jumpOffset = (jumpNoise - 0.5) * u_glitchStrength * 2.0 * jumpActive;
-
-      vec2 glitchUv = uv + vec2(jumpOffset, 0.0);
-
-      float r = texture2D(u_image, glitchUv + vec2(offset + u_glitchRgbSplit, 0.0)).r;
-      float g = texture2D(u_image, glitchUv + vec2(offset, 0.0)).g;
-      float b = texture2D(u_image, glitchUv + vec2(offset - u_glitchRgbSplit, 0.0)).b;
+      float r = texture2D(u_image, uv + vec2(offset + u_glitchRgbSplit, 0.0)).r;
+      float g = texture2D(u_image, uv + vec2(offset, 0.0)).g;
+      float b = texture2D(u_image, uv + vec2(offset - u_glitchRgbSplit, 0.0)).b;
 
       gl_FragColor = vec4(r, g, b, color.a);
     } else {
