@@ -260,7 +260,8 @@ gl.clearColor(0, 0, 0, 1);
 gl.clear(gl.COLOR_BUFFER_BIT);
 
 const vertexShaderSource = `
-precision mediump float;
+precision highp float;
+
 attribute vec2 a_position;
 attribute vec2 a_texCoord;
 
@@ -321,7 +322,7 @@ void main() {
 `;
 
 const fragmentShaderSource = `
-precision mediump float;
+precision highp float;
 
 varying vec2 v_texCoord;
 uniform sampler2D u_image;
@@ -347,8 +348,14 @@ uniform float u_glitchRgbSplit;
 
 uniform float u_effect;
 
+// float random(vec2 p) {
+//   return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+// }
+
 float random(vec2 p) {
-  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+  vec3 p3 = fract(vec3(p.x, p.y, p.x) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
 }
 
 void main() {
