@@ -511,10 +511,11 @@ void main() {
 
       gl_FragColor = color;
     } else if (u_effect == 7.0) {
-      vec2 gridUv = uv * u_pixelateCount;
+      float loop = floor(sin(u_time) * sin(u_time) * u_pixelateCount);
+      vec2 gridUv = uv * loop;
       vec2 block = floor(gridUv);
-      vec2 pixelUv = (block + 0.5) / u_pixelateCount;
-      vec4 pixelColor = texture2D(u_image, pixelUv); 
+      vec2 pixelUv = (block + 0.5) / loop;
+      vec4 pixelColor = texture2D(u_image, pixelUv);
 
       gl_FragColor = pixelColor;
     } else if (u_effect == 8.0) { 
