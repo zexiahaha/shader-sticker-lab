@@ -521,12 +521,12 @@ void main() {
     } else if (u_effect == 8.0) { 
       float column = floor(uv.x * u_meltColumnCount);
 
-      float fall = random(vec2(column, 0.0));
+      float fall = random(vec2(column + 1.0, 0.0));
 
       float verticalWeight = uv.y * 1.0;
 
       vec2 meltUv = uv;
-      float offset = fall * verticalWeight * u_meltStrength;
+      float offset = fall * verticalWeight * u_meltStrength * u_time;
       meltUv.y = uv.y - offset * clamp(u_time * u_meltSpeed, 0.0, 1.0);
 
       vec4 meltColor = texture2D(u_image, meltUv);
