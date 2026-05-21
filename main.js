@@ -511,7 +511,7 @@ void main() {
 
       gl_FragColor = color;
     } else if (u_effect == 7.0) {
-      float loop = floor(sin(u_time) * sin(u_time) * u_pixelateCount);
+      float loop = 4.0 + floor(sin(u_time) * sin(u_time) * (u_pixelateCount - 4.0));
       vec2 gridUv = uv * loop;
       vec2 block = floor(gridUv);
       vec2 pixelUv = (block + 0.5) / loop;
